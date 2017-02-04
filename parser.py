@@ -1,7 +1,7 @@
+from __future__ import division
 import pygrib
 import numpy as np
 from collections import OrderedDict
-
 
 TURIE = {"lat": 49.85, "lon": 18.16}
 RADIUS = 6371000
@@ -44,7 +44,7 @@ def interpolate(start, stop, point, prim, sec):
 	for metric in metrics:
 		interval = stop[metric] - start[metric]
 		fraction = abs(point[prim] - start[prim])  / 0.05
-		result[metric] = start[metric] + (interval * fraction)
+		result[metric] = round(start[metric] + (interval * fraction), 2)
 	return result
 
 
@@ -93,11 +93,24 @@ def parseFile(file_name, lat, lon):
 				print "[%s, %s] - alt: %s, temp: %s, press: %s" % (normalizedX+x, normalizedY+y, col['altitude'], col['temperature'], col['pressure'],  )
 	print '+++++++++++++++++'
 
+	# selected = {
+	# 	0: {
+	# 		0: {'lat': 49.85, 'lon': 18.15, 'altitude': 345, 'pressure': 1024, 'temperature': 273},
+	# 		1: {'lat': 49.85, 'lon': 18.2, 'altitude': 339, 'pressure': 1036, 'temperature': 269},
+	# 	},
+	# 	1: {
+	# 		0: {'lat': 49.9, 'lon': 18.15, 'altitude': 340, 'pressure': 1000, 'temperature': 280},
+	# 		1: {'lat': 49.9, 'lon': 18.2, 'altitude': 349, 'pressure': 1020, 'temperature': 275},
+	# 	}
+	# }
+
 	M = interpolate(selected[0][0], selected[0][1], station, 'lon', 'lat')	
 	N = interpolate(selected[1][0], selected[1][1], station, 'lon', 'lat')
 	X = interpolate(M, N, station, 'lat', 'lon')
 
 	print '==================='
+	# print M
+	# print N
 	print X
 
 
