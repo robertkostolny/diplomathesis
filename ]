@@ -76,8 +76,7 @@ def parseFile(file_name, lat, lon):
 	if not os.path.isfile(file_name):
 		return False
 	grbs = pygrib.open(file_name)
-	# typeOfLevel zmenit na isobaricInhPa
-	filtered = grbs.select(typeOfLevel='surface')
+	filtered = grbs.select(typeOfLevel='heightAboveGround')
 	result = {
 		-0.05: {-0.05: {'active': True}, 0: {'active': True}, 0.05: {'active': True}},
 		0: {-0.05: {'active': True}, 0: {'active': True}, 0.05: {'active': True}},
@@ -89,15 +88,13 @@ def parseFile(file_name, lat, lon):
 			if col['active']:
 				for point in filtered:
 					if hasattr(point, 'values') and point.values.any():
-						# po zmene na isobaricInhPa nedostanem 1 hodnotu, ale pole hodnot pre kazdy "level" tlaku. Tu si teda ulozim do resultu nie altitude, pressure, temperature ale pole levelov, kde kazdy ma temperature a altitude
 						if point.parameterName == 'Geopotential height':
 							result[x][y]['altitude'] = round(potentialToGeometric(point.values[normalizedX+x][normalizedY+y]), 2)
 						if point.parameterName == 'Temperature':
 							result[x][y]['temperature'] = round(point.values[normalizedX+x][normalizedY+y], 2)
 						if point.parameterName == 'Pressure':
 							result[x][y]['pressure'] = round(point.values[normalizedX+x][normalizedY+y], 2)
-	# Tu uz mam 9 poli, ktore obklopuju to, do ktoreho spada stanica. Nadmorsku vysku stanice musim umiestnit do niektoreho z levelov modelu isobaricInhPa. Nasledne pre kazde z 9 poli vyberiem ten zaznam z levels, ktory ma tuto nadmorsku vysku
-	# Vysledkom je transformacia z formatu {level -> alt, temp} na format {alt, temp, press} potom uz sa kod sprava ako doteraz
+
 	selected = {0: {}, 1: {}}
 	# print '+++++++++++++++++'
 	i = -1
