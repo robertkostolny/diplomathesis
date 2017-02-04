@@ -76,6 +76,17 @@ def parseFile(file_name, lat, lon):
 	if not os.path.isfile(file_name):
 		return False
 	grbs = pygrib.open(file_name)
+
+	types = []
+	for point in grbs:
+		if point.parameterName == 'Pressure' and hasattr(point, 'values') and point.values.any():
+			if point.typeOfLevel not in types:
+				types.append(point.typeOfLevel)
+				print round(point.values[normalizedX][normalizedY], 2)
+	print types
+	return
+
+
 	filtered = grbs.select(typeOfLevel='surface')
 	result = {
 		-0.05: {-0.05: {'active': True}, 0: {'active': True}, 0.05: {'active': True}},
@@ -214,6 +225,7 @@ def parseStation(day, station, coords):
 			if result:
 				file_line = "%s %s %s %s %s %s" % (station, day[2:], getOutputHour(loop, hour), result['pressure'], result['temperature'], result['altitude'])
 				print file_line
+				return
 				fo.write(file_line)
 	fo.close()
 
