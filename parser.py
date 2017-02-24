@@ -19,7 +19,7 @@ STATIONS = {
 	"GOPE": {"lat": 49.55, "lon": 14.47},
 	"TUBO": {"lat": 49.12, "lon": 16.35},
 	"VACO": {"lat": 49.08, "lon": 13.43},
-	"BISK": {"lat": 50.15, "lon": 17.25},
+	"BISK": {"lat": 50.15, "lon": 17.24},
 	"DRES": {"lat": 51.01, "lon": 13.43},
 	"KATO": {"lat": 50.15, "lon": 19.02},
 	"MOPI": {"lat": 48.22, "lon": 17.16},
@@ -38,8 +38,10 @@ def markActiveFields(result, normalizedX, normalizedY, lat, lon):
 	x1 = abs(normalizedX + 0.25 - lat)
 	y0 = abs(normalizedY - 0.25 - lon)
 	y1 = abs(normalizedY + 0.25 - lon)
-
-	if x0 > x1:
+	x_diff = x1 - x0
+	y_diff = y1 - y0
+	
+	if y0 < y1: 
 		result[-0.5][0.5]['active'] = False
 		result[0][0.5]['active'] = False
 		result[0.5][0.5]['active'] = False
@@ -49,7 +51,7 @@ def markActiveFields(result, normalizedX, normalizedY, lat, lon):
 		result[0][-0.5]['active'] = False
 		result[0.5][-0.5]['active'] = False
 		direction = 0.5
-	if y0 < y1:
+	if x0 > x1:
 		result[-0.5][direction]['active'] = False
 		result[-0.5][0]['active'] = False
 	else:
@@ -73,12 +75,12 @@ def normalize(number):
 	normalized = round(number * 4) / 4
 	remainder = normalized * 100 % 100
 	if remainder == 0:
-		if number > normalized:
+		if number >= normalized:
 			normalized = float(int(normalized)) + 0.25
 		else:
 			normalized = float(int(number)) + 0.75
 	elif remainder == 50:
-		if number > normalized:
+		if number >= normalized:
 			normalized = float(int(normalized)) + 0.75
 		else:
 			normalized = float(int(number)) + 0.25
