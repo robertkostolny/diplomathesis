@@ -7,23 +7,23 @@ from collections import OrderedDict
 
 INPUT_PATH = '/home/robko/grib_data/'
 OUTPUT_PATH = '/home/robko/diplomathesis/output/'
-DAYS = ["20130505"]
+DAYS = ["20130520"]
 LOOPS = ["0000", "0600", "1200", "1800"]
 HOURS = ["000", "033", "063", "096", "129", "159"]
 STATIONS = {
-	# 'VSBO': {'lat': 49.85, 'lon': 18.16},
+	'VSBO': {'lat': 49.85, 'lon': 18.16},
 	# 'PLZN': {'lat': 49.73, 'lon': 18.35},
 	# 'WTZR': {'lat': 50.08, 'lon': 12.52},
-	'ZYWI': {'lat': 49.41, 'lon': 19.12},
-	# "": {"lat": , "lon": },
-	# "": {"lat": , "lon": },
-	# "": {"lat": , "lon": },
-	# "": {"lat": , "lon": },
-	# "": {"lat": , "lon": },
-	# "": {"lat": , "lon": },
-	# "": {"lat": , "lon": },
-	# "": {"lat": , "lon": },
-	# "": {"lat": , "lon": },
+	# 'ZYWI': {'lat': 49.41, 'lon': 19.12},
+	# "KUNZ": {"lat": 49.06, "lon": 15.12},
+	# "GOPE": {"lat": 49.55, "lon": 14.47},
+	# "TUBO": {"lat": 49.12, "lon": 16.35},
+	# "VACO": {"lat": 49.08, "lon": 13.43},
+	# "BISK": {"lat": 50.15, "lon": 17.25},
+	# "DRES": {"lat": 51.01, "lon": 13.43},
+	# "KATO": {"lat": 50.15, "lon": 19.02},
+	# "MOPI": {"lat": 48.22, "lon": 17.16},
+	
 }
 RADIUS = 6371000
 
@@ -40,21 +40,21 @@ def markActiveFields(result, normalizedX, normalizedY, lat, lon):
 	y1 = abs(normalizedY + 0.025 - lon)
 
 	if x0 < x1:
-		result[-0.05][0.05]['active'] = False
-		result[0][0.05]['active'] = False
-		result[0.05][0.05]['active'] = False
-		direction = -0.05
+		result[-0.5][0.5]['active'] = False
+		result[0][0.5]['active'] = False
+		result[0.5][0.5]['active'] = False
+		direction = -0.5
 	else:
-		result[-0.05][-0.05]['active'] = False
-		result[0][-0.05]['active'] = False
-		result[0.05][-0.05]['active'] = False
-		direction = 0.05
+		result[-0.5][-0.5]['active'] = False
+		result[0][-0.5]['active'] = False
+		result[0.5][-0.5]['active'] = False
+		direction = 0.5
 	if y0 > y1:
-		result[-0.05][direction]['active'] = False
-		result[-0.05][0]['active'] = False
+		result[-0.5][direction]['active'] = False
+		result[-0.5][0]['active'] = False
 	else:
-		result[0.05][direction]['active'] = False
-		result[0.05][0]['active'] = False
+		result[0.5][direction]['active'] = False
+		result[0.5][0]['active'] = False
 
 
 def interpolate(start, stop, point, prim, sec):
@@ -64,35 +64,40 @@ def interpolate(start, stop, point, prim, sec):
 	result[sec] = start[sec]
 	for metric in metrics:
 		interval = stop[metric] - start[metric]
-		fraction = abs(point[prim] - start[prim])  / 0.05
+		fraction = abs(point[prim] - start[prim])  / 0.5
 		result[metric] = round(start[metric] + (interval * fraction), 2)
 	return result
 
 
+def normalize(number):
+	normalized = round(number * 4) / 4
+	remainder = normalized * 100 % 100
+	if remainder == 0:
+		if number > normalized:
+			normalized = float(int(normalized)) + 0.25
+		else:
+			normalized = float(int(number)) + 0.75
+	elif remainder == 50:
+		if number > normalized:
+			normalized = float(int(normalized)) + 0.75
+		else:
+			normalized = float(int(number)) + 0.25
+	return normalized
+
+
 def parseFile(file_name, lat, lon):
-	normalizedX = round(lat * 10 * 2) / 10 /2
-	normalizedY = round(lon * 10 * 2) / 10 /2
+	normalizedX = normalize(lat)
+	normalizedY = normalize(lon)
 	station = {'lat': lat, 'lon': lon}
 	if not os.path.isfile(file_name):
 		return False
 	grbs = pygrib.open(file_name)
-     
-	types = []
-     	for point in grbs:
-		if point.parameterName == '196' and hasattr(point, 'values') and point.values.any():
-              
-			if point.typeOfLevel not in types:
-				types.append(point.typeOfLevel)                   
-				print round(point.values[normalizedX][normalizedY], 2)                    
-	print types
-
-	return
-
+	# typeOfLevel zmenit na isobaricInhPa
 	filtered = grbs.select(typeOfLevel='surface')
 	result = {
-		-0.05: {-0.05: {'active': True}, 0: {'active': True}, 0.05: {'active': True}},
-		0: {-0.05: {'active': True}, 0: {'active': True}, 0.05: {'active': True}},
-		0.05: {-0.05: {'active': True}, 0: {'active': True}, 0.05: {'active': True}},
+		-0.5: {-0.5: {'active': True}, 0: {'active': True}, 0.5: {'active': True}},
+		0: {-0.5: {'active': True}, 0: {'active': True}, 0.5: {'active': True}},
+		0.5: {-0.5: {'active': True}, 0: {'active': True}, 0.5: {'active': True}},
 	}
 	markActiveFields(result, normalizedX, normalizedY, lat, lon)
 	for x, row in result.items():
@@ -100,13 +105,15 @@ def parseFile(file_name, lat, lon):
 			if col['active']:
 				for point in filtered:
 					if hasattr(point, 'values') and point.values.any():
+						# po zmene na isobaricInhPa nedostanem 1 hodnotu, ale pole hodnot pre kazdy "level" tlaku. Tu si teda ulozim do resultu nie altitude, pressure, temperature ale pole levelov, kde kazdy ma temperature a altitude
 						if point.parameterName == 'Geopotential height':
 							result[x][y]['altitude'] = round(potentialToGeometric(point.values[normalizedX+x][normalizedY+y]), 2)
 						if point.parameterName == 'Temperature':
 							result[x][y]['temperature'] = round(point.values[normalizedX+x][normalizedY+y], 2)
 						if point.parameterName == 'Pressure':
 							result[x][y]['pressure'] = round(point.values[normalizedX+x][normalizedY+y], 2)
-
+	# Tu uz mam 9 poli, ktore obklopuju to, do ktoreho spada stanica. Nadmorsku vysku stanice musim umiestnit do niektoreho z levelov modelu isobaricInhPa. Nasledne pre kazde z 9 poli vyberiem ten zaznam z levels, ktory ma tuto nadmorsku vysku
+	# Vysledkom je transformacia z formatu {level -> alt, temp} na format {alt, temp, press} potom uz sa kod sprava ako doteraz
 	selected = {0: {}, 1: {}}
 	# print '+++++++++++++++++'
 	i = -1
@@ -125,7 +132,8 @@ def parseFile(file_name, lat, lon):
 					'pressure': col['pressure'],
 					'temperature': col['temperature']
 				}
-				# print "[%s, %s] - alt: %s, temp: %s, press: %s" % (normalizedX+x, normalizedY+y, col['altitude'], col['temperature'], col['pressure'],  )
+				print "[%s, %s] - alt: %s, temp: %s, press: %s" % (normalizedX+x, normalizedY+y, col['altitude'], col['temperature'], col['pressure'],  )
+	return
 	# print '+++++++++++++++++'
 
 	# selected = {
@@ -217,7 +225,7 @@ def getOutputHour(loop, hour):
 
 
 def parseStation(day, station, coords):
-	save_name = OUTPUT_PATH + day + '_' + station + '.txt'
+	save_name = OUTPUT_PATH + station + day[2:] + '.txt'
 	fo = open(save_name, "wb")
 	for loop in LOOPS:
 		for hour in HOURS:
@@ -226,8 +234,7 @@ def parseStation(day, station, coords):
 			if result:
 				file_line = "%s %s %s %s %s %s" % (station, day[2:], getOutputHour(loop, hour), result['pressure'], result['temperature'], result['altitude'])
 				print file_line
-				return
-				fo.write(file_line)
+				fo.write(file_line + '\n')
 	fo.close()
 
 
