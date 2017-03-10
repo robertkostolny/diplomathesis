@@ -7,7 +7,7 @@ from collections import OrderedDict
 
 INPUT_PATH = '/home/robko/grib_data/'
 OUTPUT_PATH = '/home/robko/diplomathesis/output/'
-DAYS = ["20130505"]
+DAYS = ["20130507"]
 LOOPS = ["0000", "0600", "1200", "1800"]
 HOURS = ["000", "033", "063", "096", "129", "159"]
 STATIONS = {
@@ -79,7 +79,7 @@ def parseFile(file_name, lat, lon):
      
 	types = []
      	for point in grbs:
-		if point.parameterName == '196' and hasattr(point, 'values') and point.values.any():
+		if point.parameterName == '200' and hasattr(point, 'values') and point.values.any():
               
 			if point.typeOfLevel not in types:
 				types.append(point.typeOfLevel)                   

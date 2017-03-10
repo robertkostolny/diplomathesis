@@ -1,13 +1,12 @@
 from __future__ import division
 import pygrib
 import os.path
-import numpy as np
-from collections import OrderedDict
+
 
 
 INPUT_PATH = '/home/robko/grib_data/'
 OUTPUT_PATH = '/home/robko/diplomathesis/output/'
-DAYS = ["20130520"]
+DAYS = ["20130530"]
 LOOPS = ["0000", "0600", "1200", "1800"]
 HOURS = ["000", "033", "063", "096", "129", "159"]
 STATIONS = {
@@ -25,109 +24,108 @@ STATIONS = {
 	"MOPI": {"lat": 48.22, "lon": 17.16},
 	
 }
-RADIUS = 6371000
+RADIUS = 6371000 # polomer Zeme v metroch
 
-
+# funkcia prepocitava potencialnu vysku modelu na geometricku(nadmorsku)
 def potentialToGeometric(altitude):
 	result = (altitude*RADIUS)/(RADIUS-altitude)
 	return result
 
-
+# funkcia ktora vybera styri bunky potrebne na interpolaciu z deviatich
 def markActiveFields(result, normalizedX, normalizedY, lat, lon):
-	x0 = abs(normalizedX - 0.25 - lat)
-	x1 = abs(normalizedX + 0.25 - lat)
-	y0 = abs(normalizedY - 0.25 - lon)
-	y1 = abs(normalizedY + 0.25 - lon)
-	x_diff = x1 - x0
-	y_diff = y1 - y0
+	x0 = abs(normalizedX - 0.25 - lat) # je vzdialenost od spodnej strany bunky
+	x1 = abs(normalizedX + 0.25 - lat) # je vzdialenost od vrchnej strany bunky
+	y0 = abs(normalizedY - 0.25 - lon) # je vzdialenost od lavej bunky
+	y1 = abs(normalizedY + 0.25 - lon) # je vzdialenost od pravej bunky
+
 	
-	if y0 < y1: 
+	if y0 < y1: # pokial vzdialenost od lavej je vacsia ako od pravej tak ma spodok nezaujima (neberiem do uvahy spodne bunky)
 		result[-0.5][0.5]['active'] = False
 		result[0][0.5]['active'] = False
 		result[0.5][0.5]['active'] = False
-		direction = -0.5
+		direction = -0.5 # bez ohladu na to ci budem mazat pravu alebo lavu stranu tak ymayem stred a vrch
 	else:
 		result[-0.5][-0.5]['active'] = False
 		result[0][-0.5]['active'] = False
 		result[0.5][-0.5]['active'] = False
 		direction = 0.5
-	if x0 > x1:
-		result[-0.5][direction]['active'] = False
-		result[-0.5][0]['active'] = False
+	if x0 > x1: # ci vzdialenost od lavej strany bunky je vacsia ako vzdialenost od pravej strany bunky
+		result[-0.5][direction]['active'] = False #zmaze sa vrch(pripadne spodok) podla toho ci v predoslom kroku 
+		result[-0.5][0]['active'] = False # zmaze sa stred
 	else:
 		result[0.5][direction]['active'] = False
 		result[0.5][0]['active'] = False
 
-
+# bilinearna interpolacia pre odhad hodnot v mieste stanice
 def interpolate(start, stop, point, prim, sec):
 	result = {}
 	metrics = ['altitude', 'pressure', 'temperature']
-	result[prim] = point[prim]
+	result[prim] = point[prim] # prim - je primarna suradnica (zalezi od toho v ktorom smere sa zacina interpolacia)
 	result[sec] = start[sec]
 	for metric in metrics:
-		interval = stop[metric] - start[metric]
-		fraction = abs(point[prim] - start[prim])  / 0.5
-		result[metric] = round(start[metric] + (interval * fraction), 2)
+		interval = stop[metric] - start[metric] # hodnota rozdielu metrik medzi zaciatkom a koncom bunky
+		fraction = abs(point[prim] - start[prim])  / 0.5 # o kolko je posunuta stanica od zaciatku intervalu(bunky) a podelim to sirkou bunky (suradnicovy rozdiel)
+		result[metric] = round(start[metric] + (interval * fraction), 2) # k hodnote metriky ktora je na zaciatku intervalu pripocitam hodnotu metriky vypocitanu pomocou premennych - interval a fraction
 	return result
 
 
 def normalize(number):
-	normalized = round(number * 4) / 4
-	remainder = normalized * 100 % 100
-	if remainder == 0:
+	normalized = round(number * 4) / 4 # normalizacia suradnice, aby bolo za desatinnou ciarkou suradnice bud 0, 0.25, 0.5 alebo 0.75
+	remainder = normalized * 100 % 100 # ulozim si desatinnu cast suradnice
+     # pokial je desatinna cast 0.25 alebo 0.75 podmienky sa nevykonanju
+	if remainder == 0: #
 		if number >= normalized:
-			normalized = float(int(normalized)) + 0.25
+			normalized = float(int(normalized)) + 0.25 # priklad: vrati 5.25 ked povodne bolo napr.5.16(interval 5.0 az 5.25), to znamena ze ak je povodne cislo(5.16) vecsie alebo rovne normalizovanemu 5.0 tak odreze od 5.16 desatinne miesta a pricita 0.25 (z cisla 5.16 sa potom stane 5.25)
 		else:
-			normalized = float(int(number)) + 0.75
+			normalized = float(int(number)) + 0.75 #priklad: vrati 4.75 ked povodne bolo napr. 4.91(interval 4.75 az 5.0), postup taky isty ako v predoslom komentari len nepricita 0.25 ale 0.75.
 	elif remainder == 50:
 		if number >= normalized:
-			normalized = float(int(normalized)) + 0.75
+			normalized = float(int(normalized)) + 0.75 # to iste len pre iny interval hodnot
 		else:
 			normalized = float(int(number)) + 0.25
 	return normalized
 
-
+# parsovanie dat zo suborov GFS
 def parseFile(station_name, file_name, lat, lon):
-	normalizedX = normalize(lat)
+	normalizedX = normalize(lat) 
 	normalizedY = normalize(lon)
 	station = {'lat': lat, 'lon': lon}
-	if not os.path.isfile(file_name):
+	if not os.path.isfile(file_name): 
 		return False
 	grbs = pygrib.open(file_name)
-	# typeOfLevel zmenit na isobaricInhPa
-	filtered = grbs.select(typeOfLevel='surface')
+	filtered = grbs.select(typeOfLevel='surface') # surface je nazov hladiny z ktorej boli metriky (veliciny) parsovane
+     # dvojzrozmerne pole 3x3 bunky a v strede je bunka kde lezi stanica
 	result = {
-		-0.5: {-0.5: {'active': True}, 0: {'active': True}, 0.5: {'active': True}},
+		-0.5: {-0.5: {'active': True}, 0: {'active': True}, 0.5: {'active': True}}, # slovnik kde klucom je posun (-0.5, 0, 0.5)
 		0: {-0.5: {'active': True}, 0: {'active': True}, 0.5: {'active': True}},
 		0.5: {-0.5: {'active': True}, 0: {'active': True}, 0.5: {'active': True}},
 	}
 	markActiveFields(result, normalizedX, normalizedY, lat, lon)
-	for x, row in result.items():
-		for y, col in row.items():
-			if col['active']:
-				for point in filtered:
-					if hasattr(point, 'values') and point.values.any():
-						# po zmene na isobaricInhPa nedostanem 1 hodnotu, ale pole hodnot pre kazdy "level" tlaku. Tu si teda ulozim do resultu nie altitude, pressure, temperature ale pole levelov, kde kazdy ma temperature a altitude
-						if point.parameterName == 'Geopotential height':
-							result[x][y]['altitude'] = round(potentialToGeometric(point.values[normalizedX+x][normalizedY+y]), 2)
-						if point.parameterName == 'Temperature':
-							result[x][y]['temperature'] = round(point.values[normalizedX+x][normalizedY+y], 2)
-						if point.parameterName == 'Pressure':
-							result[x][y]['pressure'] = round(point.values[normalizedX+x][normalizedY+y], 2)
-	# Tu uz mam 9 poli, ktore obklopuju to, do ktoreho spada stanica. Nadmorsku vysku stanice musim umiestnit do niektoreho z levelov modelu isobaricInhPa. Nasledne pre kazde z 9 poli vyberiem ten zaznam z levels, ktory ma tuto nadmorsku vysku
-	# Vysledkom je transformacia z formatu {level -> alt, temp} na format {alt, temp, press} potom uz sa kod sprava ako doteraz
-	selected = {0: {}, 1: {}}
+	for x, row in result.items(): # prechadza aktivne riadky z vybranych deviatich
+		for y, col in row.items(): # prechadza aktivne stlpce z vybranych deviatich
+			if col['active']: 
+				for metric_value in filtered: # vyber hodnoty veliciny z hladiny surface
+					if hasattr(metric_value, 'values') and metric_value.values.any():
+                                 # x,y je posun na zaklade ktoreho je vkladana hodnota tlaku, tepoty a vysky do resultu
+						if metric_value.parameterName == 'Geopotential height':
+							result[x][y]['altitude'] = round(potentialToGeometric(metric_value.values[normalizedX+x][normalizedY+y]), 2)
+						if metric_value.parameterName == 'Temperature':
+							result[x][y]['temperature'] = round(metric_value.values[normalizedX+x][normalizedY+y], 2)
+						if metric_value.parameterName == 'Pressure':
+							result[x][y]['pressure'] = round(metric_value.values[normalizedX+x][normalizedY+y], 2)
+	selected = {0: {}, 1: {}} #
 	# print '+++++++++++++++++'
 	i = -1
-	print "-- %s  --" % (station_name)
-	for x, row in result.items():
+	# print "-- %s  --" % (station_name)
+     # nutne aby sa vybrane 4 bunky nepoprehadzovali ked sa budu ukladat do novej matice 2x2 (aby bolo zachovane poradie stlcpov a riadkov ako v povovdnej matici 3x3 - kvoli interpolaci)
+	for x, row in result.items(): # prechadzam riadky resultu (mam 9 zaznamov a z toho mam hodnoty iba pri styroch aktivnych)
 		prev_i = i
 		j = -1
 		for y, col in row.items():
 			if col['active']:
 				j += 1
 				if prev_i == i:
-					i += 1
+					i += 1 
 				selected[i][j] = {
 					'lat': normalizedX + x,
 					'lon': normalizedY + y,
@@ -135,8 +133,7 @@ def parseFile(station_name, file_name, lat, lon):
 					'pressure': col['pressure'],
 					'temperature': col['temperature']
 				}
-				print "[%s, %s] - alt: %s, temp: %s, press: %s" % (normalizedX+x, normalizedY+y, col['altitude'], col['temperature'], col['pressure'],  )
-	return
+				# print "[%s, %s] - alt: %s, temp: %s, press: %s" % (normalizedX+x, normalizedY+y, col['altitude'], col['temperature'], col['pressure'],  )
 	# print '+++++++++++++++++'
 
 	# selected = {
@@ -149,7 +146,7 @@ def parseFile(station_name, file_name, lat, lon):
 	# 		1: {'lat': 49.9, 'lon': 18.2, 'altitude': 349, 'pressure': 1020, 'temperature': 275},
 	# 	}
 	# }
-
+    #interpolacia
 	M = interpolate(selected[0][0], selected[0][1], station, 'lon', 'lat')	
 	N = interpolate(selected[1][0], selected[1][1], station, 'lon', 'lat')
 	X = interpolate(M, N, station, 'lat', 'lon')
@@ -160,61 +157,26 @@ def parseFile(station_name, file_name, lat, lon):
 	# print X
 	return X
 
-
+# definovanie casovej stopy vstupnych suborov
 def zero(hour):
-	if hour == "000":
-		return "0000"
-	if hour == "033":
-		return "0100"
-	if hour == "063":
-		return "0200"
-	if hour == "096":
-		return "0300"
-	if hour == "129":
-		return "0400"
-	return "0500"
-
+	if hour == "006":
+		return "0600"
+	return "0900"
 
 def six(hour):
-	if hour == "000":
-		return "0600"
-	if hour == "033":
-		return "0700"
-	if hour == "063":
-		return "0800"
-	if hour == "096":
-		return "0900"
-	if hour == "129":
-		return "1000"
-	return "1100"
-
+	if hour == "006":
+		return "1200"
+	return "1500"
 
 def twelve(hour):
-	if hour == "000":
-		return "1200"
-	if hour == "033":
-		return "1300"
-	if hour == "063":
-		return "1400"
-	if hour == "096":
-		return "1500"
-	if hour == "129":
-		return "1600"
-	return "1700"
-
+	if hour == "006":
+		return "1800"
+	return "2100"
 
 def eighteen(hour):
-	if hour == "000":
-		return "1800"
-	if hour == "033":
-		return "1900"
-	if hour == "063":
-		return "2000"
-	if hour == "096":
-		return "2100"
-	if hour == "129":
-		return "2200"
-	return "2300"	
+	if hour == "006":
+		return "2400"
+	return "0300"	
 
 
 def getOutputHour(loop, hour):
@@ -228,14 +190,14 @@ def getOutputHour(loop, hour):
 
 
 def parseStation(day, station, coords):
-	save_name = OUTPUT_PATH + station + day[2:] + '.txt'
+	save_name = OUTPUT_PATH + station + day[2:] + '.txt' 
 	fo = open(save_name, "wb")
 	for loop in LOOPS:
 		for hour in HOURS:
 			file_name = INPUT_PATH + 'gfs_4_' + day + '_' + loop + '_' + hour + '.grb2'
 			result = parseFile(station, file_name, coords['lat'], coords['lon'])
 			if result:
-				file_line = "%s %s %s %s %s %s" % (station, day[2:], getOutputHour(loop, hour), result['pressure'], result['temperature'], result['altitude'])
+				file_line = "%s %s %s %s %s %s" % (station, day, getOutputHour(loop, hour), result['pressure'], result['temperature'], result['altitude'])
 				print file_line
 				fo.write(file_line + '\n')
 	fo.close()
@@ -243,6 +205,6 @@ def parseStation(day, station, coords):
 
 if __name__ == "__main__":
 	for day in DAYS:
-		for station, coords in STATIONS.items():
-			parseStation(day, station, coords)
+		for station, coords in STATIONS.items(): 
+			parseStation(day, station, coords) # zavolanie stanice so suradnicami pre konkretny den
 

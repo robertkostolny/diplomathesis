@@ -10,8 +10,6 @@
 #-------------------------------------------------------------------------------
 
 import os
-import sys
-import subprocess
 from datetime import date
 import utility
 import re
@@ -82,7 +80,7 @@ import shutil
 #...............................................................................
 #funkcia pre konverziu ZTD na IWV
 #...............................................................................
-def konverziaZTD_na_IWV(myMEDARD,ZTD_TRP,STA,result_IWV):
+def konverziaZTD_na_IWV(myGFS,ZTD_TRP,STA,result_IWV):
 
     flag_error = 0
 
@@ -108,8 +106,8 @@ def konverziaZTD_na_IWV(myMEDARD,ZTD_TRP,STA,result_IWV):
     station_dictionary = {}
 
     #vyber nazvov stanic do zoznamu s ktorymi sa pracuje + datum na stanici
-    if len(os.listdir(myMEDARD)) > 0:
-        for file in os.listdir(myMEDARD):
+    if len(os.listdir(myGFS)) > 0:
+        for file in os.listdir(myGFS):
             stations_list_meteo.append(file[0:10])
             station_dictionary.update({file[0:10]:file})
 
@@ -146,7 +144,7 @@ def konverziaZTD_na_IWV(myMEDARD,ZTD_TRP,STA,result_IWV):
 
                 #nacitanie meteo dat pre stanicu s ktorou sa aktualne pracuje
                 soubor = station_dictionary[station]
-                g = open(myMEDARD+'/'+soubor, 'r',)
+                g = open(myGFS+'/'+soubor, 'r',)
                 linesMeteo = g.readlines()
                 g.close()
 
@@ -202,10 +200,10 @@ def konverziaZTD_na_IWV(myMEDARD,ZTD_TRP,STA,result_IWV):
                         radek_meteo_pole = re.split('\s+',linesMeteo[memKey].strip(' '))
 
                         #volanie funkcie pre vypocet ZHD, ZWD, IWV
-                        IWV_pole = utility.computeIWV(coord_meteo[1],coord_meteo[2],height_difference,float(radek_meteo_pole[3])/100,float(radek_meteo_pole[4]),float(radek_ztd_pole[12]))
+                        IWV_pole = utility.computeIWV(coord_meteo[1],coord_meteo[2],height_difference,float(radek_meteo_pole[3]),float(radek_meteo_pole[4]),float(radek_ztd_pole[12]))
         ##                print str(station),coord_meteo[1],coord_meteo[2],height_difference,float(radek_meteo_pole[3]),float(radek_meteo_pole[4]),float(radek_ztd_pole[12])
-        ##                print IWV_pole
-                        zapis.write(str(time_ztd_seconds) + ' ' + str(station) + str(time_ztd_seconds) + ' ' + str(IWV_pole[0]) + ' ' + str(IWV_pole[1]) + ' ' + str(IWV_pole[2]) + ' ' + str(IWV_pole[3]) + ' ' + str(IWV_pole[4]) + "\n")
+       ##                 print IWV_pole
+                        zapis.write(str(station) + ' ' + str(IWV_pole[0]) + ' ' + str(IWV_pole[1]) + ' ' + str(IWV_pole[2]) + ' ' + str(IWV_pole[3]) + ' ' + str(IWV_pole[4]) + '\n')
 
                 zapis.close()
 
@@ -215,8 +213,8 @@ def konverziaZTD_na_IWV(myMEDARD,ZTD_TRP,STA,result_IWV):
                 print '============================================================================='
 
 #input01
-metMEDARD = '01input/Meteo'
-myMEDARD = '02temp/myMeteo'
+
+myGFS = '02temp/myGFS'
 ZTD_TRP = '01input/TRP'
 
 #temp02
@@ -226,4 +224,4 @@ STA = '01input/STA'
 result_IWV = '03results/IWV'
 
 ##medardtATM(metMEDARD, myMEDARD)
-konverziaZTD_na_IWV(myMEDARD,ZTD_TRP,STA,result_IWV)
+konverziaZTD_na_IWV(myGFS,ZTD_TRP,STA,result_IWV)
